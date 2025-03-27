@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.10)
+project(ResistKernelGPU)
+
+set(CMAKE_CXX_STANDARD 11)
+find_package(OpenMP)
+add_definitions( -DHAWK )
+
+add_executable(ResistKernelC src/ResistKernelC.cpp)
+if(OpenMP_CXX_FOUND)
+	target_link_libraries(ResistKernelC PUBLIC OpenMP::OpenMP_CXX)
+endif()
+add_executable(ResistKernelGPU src/ResistKernelGPU.cpp)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(ResistKernelGPU PUBLIC OpenMP::OpenMP_CXX)
+endif()
