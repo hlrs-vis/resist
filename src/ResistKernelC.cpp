@@ -45,7 +45,7 @@ inline bool isValid(int x, int y, int rows, int cols) {
 // 
 // Function to compute the minimum cost distance matrix sum
 
-int getcostsum(vector<vector<double>>& costGrid, int startX, int startY, int cellSi, int rad, int maxWid)
+int getcostsum(vector<vector<double>>& costGrid, int startX, int startY, int cellSi, int hKer, int timesHker)
 {
 // Directions for 8-neighbor movement
 const int dx[8] = { -1, -1, -1, 0, 0, 1, 1, 1 };
@@ -94,28 +94,28 @@ const double moveCost[8] = { sqrt(2), 1, sqrt(2), 1, 1, sqrt(2), 1, sqrt(2) };
 	}
 
 	//Summe der Widerstände cs berechnen
-	int cs = 0;
+	int cs = 0, length, weight;
 	for (int ro = 0; ro < rows; ro++)
 	{
 		for (int co = 0; co < cols; co++)
 		{
-			double A_x, A_y, B_x, B_y;
-			A_x = startX * cellSi;
-			A_y = startY * cellSi;
-			B_x = co * cellSi;
-			B_y = ro * cellSi;
-			double Dx = A_x - B_x;
-			double Dy = A_y - B_y;
-			int d = sqrt(Dx*Dx + Dy*Dy);
-			if (d <= rad)
+			//double A_x, A_y, B_x, B_y;
+			//A_x = startX * cellSi;
+			//A_y = startY * cellSi;
+			//B_x = co * cellSi;
+			//B_y = ro * cellSi;
+			//double Dx = A_x - B_x;
+			//double Dy = A_y - B_y;
+			//int d = sqrt(Dx * Dx + Dy * Dy);
+
+			length = pq.size() * cellSi;
+			weight = 1 / exp(length * length / (2 * hKer * hKer)) ;
+			if (length <= timesHker * hKer)
 			{
-				if (cs <= maxWid)
-				{
-					cs = cs + minCost[ro][co];
-				}
+				cs = cs + weight * minCost[ro][co];
 			}
 		}
-	}	
+	}
 	return cs;
 }
 
@@ -125,7 +125,7 @@ const double moveCost[8] = { sqrt(2), 1, sqrt(2), 1, 1, sqrt(2), 1, sqrt(2) };
 // 
 int main()
 {
-	int cs, fd, anzges, anz1, row, i, s, zeilength;
+	int cs, fd, anzges, anz1, row, i, zeilength;
 	int p, q, done, costsum;
 	double d, dsum, sumges, A_x, A_y, B_x, B_y, xout, yout, wcc, dis;
 	string line, anfang, str1, str2;
@@ -143,26 +143,25 @@ int main()
 
 	ifstream infile;
 	stringstream inStr;
-	infile.open("/zhome/academic/rus/rus/woess/ilpoe/BeispielMatrix.txt");
+	infile.open("/zhome/academic/rus/rus/woess/ilpoe/Resist30_401.asc");
 
 	ofstream outfile;
-	outfile.open("/zhome/academic/rus/rus/woess/ilpoe/WidObfDet30_resist.asc");
+	outfile.open("/zhome/academic/rus/rus/woess/ilpoe/Resist30_401_perm.asc");
 
 	std::cout.precision(10);
 	outfile.precision(10);
 
 	std::cout << "RsistKernel" << endl;
-	std::cout << "..\\... .txt -> ..\\.... .txt" << endl;
+	std::cout << ".\\*.asc -> .\\*.asc" << endl;
 	std::cout << "Author/(C): svr@ilpoe.uni-stuttgart.de" << endl;
 	std::cout << "No guarantee against unexpected runtime exceptions, usage at your own risk." << endl;
 	std::cout << "No responsibility for validity of results." << endl << endl;
 
-	int r;
-	int reslim;
-	r = 1000;
-	reslim = 1000;
-	std::cout << "Kernel-radius: " << r << endl;
-	std::cout << "Max-Resist: " << reslim << endl;
+	int h = 400;
+	int s = 2;
+	
+	std::cout << "Standard-Deviation (m): " << h << endl;
+	std::cout << "Multiplier: " << s << endl;
 
 	//ASCII-HEADER LESEN	
 	getline(infile, line);
@@ -211,22 +210,20 @@ int main()
 	string subs;
 	int pos, posIs, aNum;
 
-	zeilength = ncols * 2 + 1;
 	for (row = 0; row < nrows; row++)
 	{
-		getline(infile, line);			
+		getline(infile, line);
+		stringstream ss(line);
+
 		for (i = 0; i < ncols; i++)
 		{
-			posIs = 0;
-			pos = line.find(' ');
-			subs = line.substr(posIs, pos);				
+			getline(ss, subs, ' ');
 			aNum = stoi(subs);
 			if (aNum == -9999)
 			{
 				aNum = 9999;
 			}
 			grid[row][i] = aNum;
-			posIs = pos;
 		}
 		done = row * 100 / nrows;
 		std::cout << "\r" << done << "%";
@@ -240,13 +237,15 @@ int main()
 	int step = 1;
 	vector<int> costsums(ncols, 0);
 
-	p = (r / cellsize) - 1;
+	p = (s*h / cellsize) - 1;
 
 
 	for (int rowA = 0; rowA < nrows; rowA++)
 	{
 #pragma omp parallel
+#ifdef HUNTER
 #pragma omp target teams distribute
+#endif
 		for (int colA = 0; colA < ncols; colA++)
 		{
 
@@ -272,7 +271,7 @@ int main()
 
 			//BERECHNE UND SPEICHERE KOSTENSUMME
 
-			costsums[colA] = getcostsum(umge, colA - cmin, rowA - rmin, cellsize, r, reslim);
+			costsums[colA] = getcostsum(umge, colA - cmin, rowA - rmin, cellsize, h, s);
 		
 		
 		}

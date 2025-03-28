@@ -14,6 +14,7 @@
 #include <time.h>
 #include <sstream>
 #include <cmath>
+#include <omp.h>
 
 using namespace std;
 
@@ -23,7 +24,7 @@ using namespace std;
 #endif
 
 
-	
+
 
 // Structure to represent a cell in the grid
 struct Cell {
@@ -34,46 +35,46 @@ struct Cell {
 // Define the node structure for the linked list
 struct Node {
 	Cell data;
-	Node* next=nullptr;
+	Node* next = nullptr;
 };
 
 class Stack {
 private:
 	// This variable keeps track of the stack size
-	int size;
 	static const int numNodes = 4000;
 
 public:
 	// Top-of-stack pointer
-	Node* top=nullptr;
+	Node* top = nullptr;
 	Node nodes[numNodes];
 	int numFree;
 	Node* freeNodes[numNodes];
+	int size;
 
 
 	// Constructor to initialize an empty stack
 	Stack() {
 		top = NULL; // Initialize top pointer to NULL for an empty stack
 		size = 0; // Initialize the size of the stack to zero
-		for(int i=0;i<numNodes;i++)
+		for (int i = 0; i < numNodes; i++)
 		{
-			freeNodes[i]=&nodes[i];
+			freeNodes[i] = &nodes[i];
 		}
-		numFree=numNodes;
+		numFree = numNodes;
 	}
-        Node *getNode()
+	Node* getNode()
 	{
 		return(freeNodes[--numFree]);
 	}
-        void returnNode(Node *n)
+	void returnNode(Node* n)
 	{
-		freeNodes[numFree++]=n;
+		freeNodes[numFree++] = n;
 	}
 
 	// Function to push an element onto the stack
 	void push(Cell x) {
 		Node* new_Node = getNode();
-		if(new_Node == nullptr)
+		if (new_Node == nullptr)
 		{
 			//std::cerr << "bad alloc" << std::endl;
 			return;
@@ -137,27 +138,28 @@ inline bool isValid(int x, int y, int rows, int cols) {
 
 // Function to compute the minimum cost distance matrix sum
 
-int getcostsum( int *costGrid, int rows, int cols, int startX, int startY, int cellSi, int rad, int maxWid)
+int getcostsum(int* costGrid, int rows, int cols, int startX, int startY, int cellSi, int hKer, int timesHker)
 {
-// Directions for 8-neighbor movement
-const int dx[8] = { -1, -1, -1, 0, 0, 1, 1, 1 };
-const int dy[8] = { -1, 0, 1, -1, 1, -1, 0, 1 };
-const double moveCost[8] = { sqrt(2), 1, sqrt(2), 1, 1, sqrt(2), 1, sqrt(2) };
+	// Directions for 8-neighbor movement
+	const int dx[8] = { -1, -1, -1, 0, 0, 1, 1, 1 };
+	const int dy[8] = { -1, 0, 1, -1, 1, -1, 0, 1 };
+	const double moveCost[8] = { sqrt(2), 1, sqrt(2), 1, 1, sqrt(2), 1, sqrt(2) };
 
 	// Initialize the distance matrix with infinity
-    int *minCost = new int[rows*cols];
-    for (int co = 0; co < cols; co++)
-    {
-        for (int ro = 0; ro < rows; ro++)
-        {
+	int* minCost = new int[rows * cols];
+
+#pragma omp for collapse(2)
+	for (int co = 0; co < cols; co++)
+		for (int ro = 0; ro < rows; ro++)
+		{
 			minCost[co * rows + ro] = 100000;
 		}
-	}
-	minCost[startX*rows + startY] = costGrid[startX*rows + startY];
+
+	minCost[startX * rows + startY] = costGrid[startX * rows + startY];
 
 	// Min-heap priority queue to store cells to be processed
 	Stack pq;
-	pq.push({ startX, startY, costGrid[startX*rows + startY] });
+	pq.push({ startX, startY, costGrid[startX * rows + startY] });
 
 	while (pq.top) {
 		Cell current = pq.top->data;
@@ -168,22 +170,22 @@ const double moveCost[8] = { sqrt(2), 1, sqrt(2), 1, 1, sqrt(2), 1, sqrt(2) };
 		double currentCost = current.cost;
 
 		// If the current cost is greater than the recorded minimum cost, skip processing
-		if (currentCost > minCost[x*rows + y]) continue;
+		if (currentCost > minCost[x * rows + y]) continue;
 
 		// Explore all 8 neighbors
-		for (int i = 0; i < 8; ++i) 
+		for (int i = 0; i < 8; ++i)
 		{
 			int nx = x + dx[i];
 			int ny = y + dy[i];
 
 			if (isValid(nx, ny, rows, cols)) {
 				// Calculate the movement cost
-				int newCost = minCost[x*rows + y] + costGrid[nx*rows + ny] * moveCost[i];
+				int newCost = minCost[x * rows + y] + costGrid[nx * rows + ny] * moveCost[i];
 
 				// If a lower cost path is found, update and push to the priority queue
-				if (newCost < minCost[nx*rows + ny]) 
+				if (newCost < minCost[nx * rows + ny])
 				{
-					minCost[nx*rows + ny] = newCost;
+					minCost[nx * rows + ny] = newCost;
 					pq.push({ nx, ny, newCost });
 				}
 			}
@@ -192,10 +194,13 @@ const double moveCost[8] = { sqrt(2), 1, sqrt(2), 1, 1, sqrt(2), 1, sqrt(2) };
 
 	//Summe der Widerstände cs berechnen
 	int cs = 0;
+	int t2 = (timesHker * hKer) * (timesHker * hKer);
+
+#pragma omp for collapse(2)
 	for (int ro = 0; ro < rows; ro++)
-	{
 		for (int co = 0; co < cols; co++)
 		{
+
 			double A_x, A_y, B_x, B_y;
 			A_x = startX * cellSi;
 			A_y = startY * cellSi;
@@ -203,16 +208,15 @@ const double moveCost[8] = { sqrt(2), 1, sqrt(2), 1, 1, sqrt(2), 1, sqrt(2) };
 			B_y = ro * cellSi;
 			double Dx = A_x - B_x;
 			double Dy = A_y - B_y;
-			int d = (int)(sqrt(Dx*Dx + Dy*Dy));
-			if (d <= rad)
+			double length2 = (Dx * Dx + Dy * Dy);
+			int weight = 1 / exp(length2 / (2 * hKer * hKer));
+			if (length2 <= t2)
 			{
-				if (cs <= maxWid)
-				{
-					cs = cs + minCost[co*rows + ro];
-				}
+#pragma omp atomic
+				cs = cs + weight * minCost[co * rows + ro];
 			}
+
 		}
-	}	
 	delete[] minCost;
 	return cs;
 }
@@ -221,17 +225,17 @@ const double moveCost[8] = { sqrt(2), 1, sqrt(2), 1, 1, sqrt(2), 1, sqrt(2) };
 // MAIN--------------------------------------------------------------------------
 // MAIN--------------------------------------------------------------------------
 // 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
 	int row, zeilength;
 	int p, done;
 	string line, anfang, str1, str2;
-	
-	
+
+
 	//INITIALISIERUNGEN
 
-	
-        if(argc!=2)
+
+	if (argc != 2)
 	{
 		std::cerr << "Usage: " << argv[0] << " InputFile.txt" << std::endl;
 		return -1;
@@ -255,12 +259,15 @@ int main(int argc, char **argv)
 	std::cout << "No guarantee against unexpected runtime exceptions, usage at your own risk." << endl;
 	std::cout << "No responsibility for validity of results." << endl << endl;
 
+	int h = 400;
+	int s = 2;
+
+	std::cout << "Standard-Deviation (m): " << h << endl;
+	std::cout << "Multiplier: " << s << endl;
+
 	int r;
-	int reslim;
-	r = 1000;
-	reslim = 1000;
+	r = s*h;
 	std::cout << "Kernel-radius: " << r << endl;
-	std::cout << "Max-Resist: " << reslim << endl;
 
 	//ASCII-HEADER LESEN	
 	getline(infile, line);
@@ -301,8 +308,8 @@ int main(int argc, char **argv)
 	getline(infile, line);
 	outfile << line << endl;
 
-	int *grid = new int[nrows*ncols];
-	
+	int* grid = new int[nrows * ncols];
+
 	//ASCII-GRID LESEN
 
 	std::cout << "Reading Raster..." << endl;
@@ -317,36 +324,40 @@ int main(int argc, char **argv)
 		posIs = 0;
 		for (int i = 0; i < ncols; i++)
 		{
-			pos = line.find(' ',posIs);
-			subs = line.substr(posIs, pos);				
+			pos = line.find(' ', posIs);
+			subs = line.substr(posIs, pos);
 			aNum = stoi(subs);
 			if (aNum == -9999)
 			{
 				aNum = 9999;
 			}
-			grid[i*nrows+row] = aNum;
-			posIs = pos+1;
+			grid[i * nrows + row] = aNum;
+			posIs = pos + 1;
 		}
 		done = row * 100 / nrows;
 		std::cout << "\r" << done << "%";
 	}
 
 	std::cout << "done." << endl << "Processing..." << endl;
-	
-	
+
+
 
 	//SCHLEIFE ÜBER ALLE ZELLEN 	
 	int step = 1;
-	int *costsums = new int[ncols];
+	int* costsums = new int[ncols];
 
 	p = (r / cellsize) - 1;
 
 
 	for (int rowA = 0; rowA < nrows; rowA++)
 	{
+		double t = 0.0;
+		double tb, te;
+
+		tb = omp_get_wtime();
 #ifdef HUNTER
-#pragma omp parallel
-#pragma omp target teams distribute
+#pragma omp target teams shared(grid, costsums)      
+#pragma omp distribute 
 #else
 #ifdef HAWK
 #pragma omp parallel
@@ -357,34 +368,32 @@ int main(int argc, char **argv)
 		{
 
 			//UMGEBUNGSMATRIX HERSTELLEN
-			int *umge= new int[2 * p * 2 * p];
-			int v = 0;
+			int* umge = new int[2 * p * 2 * p];
 
 			int rmin = max(0, rowA - p);
 			int rmax = min(nrows, rowA + p);
 			int cmin = max(0, colA - p);
 			int cmax = min(ncols, colA + p);
-			int sr = rmax-rmin;
-			int sc = cmax-cmin;
+			int sr = rmax - rmin;
+			int sc = cmax - cmin;
 
-            for (int colB = cmin; colB < cmax; colB++)
-            {
-                int w = 0;
-                for (int rowB = rmin; rowB < rmax; rowB++)
-                {
-                    umge[v * sr + w] = grid[colB * nrows + rowB];
-                    w++;
-                }
-                v++;
-            }
+#pragma omp parallel for collapse(2)
+			for (int colB = cmin; colB < cmax; colB++)
+				for (int rowB = rmin; rowB < rmax; rowB++)
+				{
+					umge[(colB - cmin) * sr + (rowB - rmin)] = grid[colB * nrows + rowB];
+				}
 
 			//BERECHNE UND SPEICHERE KOSTENSUMME
-
-			costsums[colA] = getcostsum(umge,sr,sc, colA - cmin, rowA - rmin, cellsize, r, reslim);
+			costsums[colA] = getcostsum(umge, sr, sc, colA - cmin, rowA - rmin, cellsize, h, s);
 			delete[] umge;
-		
-		
+
+
 		}
+
+		te = omp_get_wtime();
+		t = te - tb;
+		std::cout << "\n" << "Time of kernel: " << t << endl;
 
 		for (int colA = 0; colA < ncols; colA++)
 		{
@@ -402,7 +411,7 @@ int main(int argc, char **argv)
 		std::cout << "\n" << rowA << "/" << nrows;
 		outfile << endl;
 
-		
+
 	}
 
 	infile.close();

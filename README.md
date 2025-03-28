@@ -5,6 +5,7 @@ The ResistKernelC project implements a program that computes a minimum cost dist
 
 ## Files
 - `src/ResistKernelC.cpp`: Contains the main function and the implementation of the cost distance matrix sum calculation.
+- `src/ResistKernelGPU.cpp`: Same as above but without stl and new in the inner loop
 - `CMakeLists.txt`: Configuration file for CMake, specifying project details and source files.
 - `README.md`: Documentation for the project.
 
