@@ -138,7 +138,7 @@ inline bool isValid(int x, int y, int rows, int cols) {
 
 // Function to compute the minimum cost distance matrix sum
 
-int getcostsum(int* costGrid, int rows, int cols, int startX, int startY, int cellSi, int hKer, int timesHker)
+int getcostsum(int* costGrid, int rows, int cols, int startX, int startY, int cellSi, int sigma)
 {
 	// Directions for 8-neighbor movement
 	const int dx[8] = { -1, -1, -1, 0, 0, 1, 1, 1 };
@@ -148,7 +148,9 @@ int getcostsum(int* costGrid, int rows, int cols, int startX, int startY, int ce
 	// Initialize the distance matrix with infinity
 	int* minCost = new int[rows * cols];
 
+#ifdef HUNTER
 #pragma omp for collapse(2)
+#endif
 	for (int co = 0; co < cols; co++)
 		for (int ro = 0; ro < rows; ro++)
 		{
@@ -193,10 +195,11 @@ int getcostsum(int* costGrid, int rows, int cols, int startX, int startY, int ce
 	}
 
 	//Summe der Widerstände cs berechnen
-	int cs = 0;
-	int t2 = (timesHker * hKer) * (timesHker * hKer);
-
+	double cs = 0;
+	int t2 = 2*((sigma) * (sigma));
+#ifdef HUNTER
 #pragma omp for collapse(2)
+#endif
 	for (int ro = 0; ro < rows; ro++)
 		for (int co = 0; co < cols; co++)
 		{
@@ -209,16 +212,18 @@ int getcostsum(int* costGrid, int rows, int cols, int startX, int startY, int ce
 			double Dx = A_x - B_x;
 			double Dy = A_y - B_y;
 			double length2 = (Dx * Dx + Dy * Dy);
-			int weight = 1 / exp(length2 / (2 * hKer * hKer));
+			double weight = exp(-(length2) / t2);
 			if (length2 <= t2)
 			{
+#ifdef HUNTER
 #pragma omp atomic
-				cs = cs + weight * minCost[co * rows + ro];
+#endif
+				cs = cs + (weight * minCost[co * rows + ro]);
 			}
 
 		}
 	delete[] minCost;
-	return cs;
+	return (int)cs;
 }
 
 
@@ -259,14 +264,12 @@ int main(int argc, char** argv)
 	std::cout << "No guarantee against unexpected runtime exceptions, usage at your own risk." << endl;
 	std::cout << "No responsibility for validity of results." << endl << endl;
 
-	int h = 400;
-	int s = 2;
+	int r = 800;
+	int m = 2;
+	int sigma = r/m;
 
-	std::cout << "Standard-Deviation (m): " << h << endl;
-	std::cout << "Multiplier: " << s << endl;
-
-	int r;
-	r = s*h;
+	std::cout << "Standard-Deviation (m): " << sigma << endl;
+	std::cout << "Multiplier: " << m << endl;
 	std::cout << "Kernel-radius: " << r << endl;
 
 	//ASCII-HEADER LESEN	
@@ -377,7 +380,9 @@ int main(int argc, char** argv)
 			int sr = rmax - rmin;
 			int sc = cmax - cmin;
 
+#ifdef HUNTER
 #pragma omp parallel for collapse(2)
+#endif
 			for (int colB = cmin; colB < cmax; colB++)
 				for (int rowB = rmin; rowB < rmax; rowB++)
 				{
@@ -385,7 +390,7 @@ int main(int argc, char** argv)
 				}
 
 			//BERECHNE UND SPEICHERE KOSTENSUMME
-			costsums[colA] = getcostsum(umge, sr, sc, colA - cmin, rowA - rmin, cellsize, h, s);
+			costsums[colA] = getcostsum(umge, sr, sc, colA - cmin, rowA - rmin, cellsize, sigma);
 			delete[] umge;
 
 
